@@ -134,7 +134,7 @@
         <p class="small-text" style="text-align:center;">Question <span id="hostQNum">1</span>/10</p>
         <div id="hostTimerWidget" class="host-timer" style="margin: 0.5rem 0;">
           <div class="timer-label">⏱️ TIME REMAINING</div>
-          <div class="timer-digits" id="hostTimerSeconds">30</div>
+          <div class="timer-digits" id="hostTimerSeconds">20</div>
           <div class="small-text" id="timerStatusMsg">Waiting for question...</div>
         </div>
         <h2 id="hostQText" style="text-align:center; font-size:1.1rem; margin:0.5rem 0;"></h2>
@@ -225,7 +225,7 @@ const PASS = "0709";
 let isHost = false, pName = "", pLastName = "", playerId = "", score = 0;
 let currentQIdx = -1, answered = false;
 let hostTimerInterval = null;
-let hostTimeLeft = 30;
+let hostTimeLeft = 20; // Changed to 20 seconds
 let isTimerActive = false;
 let isGameListenerSetup = false;
 
@@ -246,7 +246,7 @@ function stopHostTimer() {
   isTimerActive = false;
 }
 
-function startHostTimer(seconds = 30, onExpireCallback) {
+function startHostTimer(seconds = 20, onExpireCallback) {
   stopHostTimer();
   hostTimeLeft = seconds;
   isTimerActive = true;
@@ -260,13 +260,17 @@ function startHostTimer(seconds = 30, onExpireCallback) {
       return;
     }
     if (hostTimeLeft <= 1) {
+      // Time's up!
       stopHostTimer();
       if (onExpireCallback) onExpireCallback();
       const msgSpan = $('timerStatusMsg');
       if (msgSpan) msgSpan.textContent = "⏰ Time's up! Use Skip or Next to continue.";
+      const timerDivEx = $('hostTimerWidget');
+      if (timerDivEx) timerDivEx.classList.add('timer-urgent');
     } else {
       hostTimeLeft--;
       updateTimerDisplay();
+      // Add urgent style when 5 seconds left
       if (hostTimeLeft <= 5 && hostTimeLeft > 0) {
         const timerDivUrgent = $('hostTimerWidget');
         if (timerDivUrgent) timerDivUrgent.classList.add('timer-urgent');
@@ -291,17 +295,19 @@ function updateTimerDisplay() {
 function resetHostTimerUI() {
   stopHostTimer();
   const timerElem = $('hostTimerSeconds');
-  if (timerElem) timerElem.textContent = '30';
+  if (timerElem) timerElem.textContent = '20'; // Changed to 20
   const msgSpan = $('timerStatusMsg');
   if (msgSpan) msgSpan.textContent = "Ready for next question";
   const timerDiv = $('hostTimerWidget');
   if (timerDiv) timerDiv.classList.remove('timer-urgent');
 }
 
+// Host triggers a new question: reset UI, start 20s timer
 function refreshHostTimerForCurrentQuestion() {
   if (!isHost) return;
   resetHostTimerUI();
-  startHostTimer(30, () => {
+  // start new 20-second timer with auto-expire
+  startHostTimer(20, () => {
     if (isHost) {
       const msgSpan = $('timerStatusMsg');
       if (msgSpan) msgSpan.textContent = "⏰ TIME EXPIRED! Press Skip or Next to proceed.";
@@ -321,9 +327,8 @@ function hostStartGame(){
   }).then(() => {
     $('hostStartGameBtn').style.display = 'none';
     $('hostGameControls').style.display = 'block';
-    resetHostTimerUI();
     updateHostDisplay(0);
-    refreshHostTimerForCurrentQuestion();
+    // Timer will be started by updateHostDisplay -> refreshHostTimerForCurrentQuestion
   });
 }
 
@@ -333,6 +338,8 @@ function hostNextQuestion(){
     hostEndGame(); 
     return; 
   }
+  // Stop current timer before moving to next question
+  stopHostTimer();
   gameRef.update({ currentQuestion: next });
 }
 
@@ -342,6 +349,7 @@ function hostForceNextQuestion() {
     hostEndGame();
     return;
   }
+  // Stop current timer before skipping
   stopHostTimer();
   gameRef.update({ currentQuestion: next });
 }
@@ -357,12 +365,13 @@ function updateHostDisplay(qIdx){
   $('hostQText').textContent = Q[qIdx].text;
   $('hostNextBtn').textContent = qIdx === Q.length - 1 ? '🏆 Finish & Show Results' : '▶ Next Question';
   
+  // Always reset and restart timer when displaying a new question
   if (isHost && $('hostGameControls').style.display === 'block') {
     refreshHostTimerForCurrentQuestion();
   }
 }
 
-// Firebase listeners - ONLY once, and guests ONLY move when host starts game
+// Firebase listeners
 function setupGameListener() {
   if (isGameListenerSetup) return;
   isGameListenerSetup = true;
@@ -374,20 +383,25 @@ function setupGameListener() {
     $('hostAnswerCount').textContent = count;
   });
   
-  // Main game state listener - guests only move to game screen when state becomes 'playing'
+  // Main game state listener
   gameRef.on('value', (snap) => {
     const data = snap.val();
     if(!data) return;
     
-    // For guests: only transition from waiting to game when host starts the game
+    // For guests: transition from waiting to game when host starts
     if(!isHost && data.state === 'playing') {
       const qIdx = data.currentQuestion;
-      // Only move to game screen if we're currently on waiting screen and game just started
       if(qIdx !== currentQIdx && qIdx >= 0 && qIdx < Q.length) {
         currentQIdx = qIdx;
         renderGuestQuestion(qIdx);
       }
     } 
+    // For host: update display when question changes (but don't restart timer twice)
+    else if(isHost && data.state === 'playing') {
+      if(data.currentQuestion !== currentQIdx && data.currentQuestion !== undefined) {
+        updateHostDisplay(data.currentQuestion);
+      }
+    }
     // If game is finished, show results
     else if(data.state === 'finished') {
       if(isHost) stopHostTimer();
@@ -511,23 +525,19 @@ $('startGameBtn').onclick = ()=>{
   $('guestNameDisplay').textContent = f + ' ' + l;
   show('guestWaitingScreen');
   setupGameListener();
-  
-  // REMOVED: The automatic check that was moving guests to questions
-  // Guests now stay on waiting screen until host starts the game
+  // Guests stay on waiting screen until host starts the game
 };
 
 $('hostStartGameBtn').onclick = hostStartGame;
 $('hostNextBtn').onclick = () => {
   if (!isHost) return;
-  stopHostTimer();
   hostNextQuestion();
 };
 $('hostForceNextBtn').onclick = () => {
   if (!isHost) return;
-  stopHostTimer();
   hostForceNextQuestion();
 };
-$('hostEndBtn').onclick = () => { stopHostTimer(); hostEndGame(); };
+$('hostEndBtn').onclick = () => { hostEndGame(); };
 $('hostResetBtn').onclick = ()=>{ stopHostTimer(); $('resetModal').style.display='flex'; };
 $('hostResultsResetBtn').onclick = ()=>{ stopHostTimer(); $('resetModal').style.display='flex'; };
 $('confirmResetBtn').onclick = ()=>{ 
