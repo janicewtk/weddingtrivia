@@ -94,6 +94,25 @@
       box-shadow: 0 8px 20px rgba(0,0,0,0.1);
       object-fit: cover;
     }
+    /* Host options styling - read only */
+    .host-options {
+      background: #f5efe4;
+      border-radius: 1rem;
+      padding: 0.8rem;
+      margin: 0.5rem 0;
+    }
+    .host-option-item {
+      padding: 0.5rem;
+      margin: 0.3rem 0;
+      background: #fefcf9;
+      border-radius: 0.8rem;
+      font-size: 0.85rem;
+      color: #5a4a38;
+    }
+    .host-correct-indicator {
+      background: #d4dfcc;
+      border-left: 3px solid #4a5e3f;
+    }
   </style>
 </head>
 <body>
@@ -135,6 +154,8 @@
           <div class="small-text" id="timerStatusMsg">Ready</div>
         </div>
         <h2 id="hostQText" style="text-align:center; font-size:1.1rem; margin:0.5rem 0;"></h2>
+        <!-- Host sees all options (read-only) -->
+        <div id="hostOptionsContainer" class="host-options"></div>
         <button id="hostNextBtn" style="width:100%; margin-bottom:0.5rem;">▶ Next Question</button>
         <button id="hostEndBtn" style="width:100%; margin-top:0.3rem; background:#cfbfa8;">🏆 End Game & Show Results</button>
         <p class="small-text" style="text-align:center; margin-top:0.5rem;">Players answered: <span id="hostAnswerCount">0</span></p>
@@ -198,6 +219,9 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const gameRef = db.ref('wedding-trivia-game');
 
+// Track when each question started for speed-based scoring
+let questionStartTime = null;
+
 const Q = [
   {text:"1. How did we meet? 我們是怎麼認識的？", opts:["A. Tinder","B. Coffee Meets Bagel","C. Hinge","D. Organically through mutuals（透過朋友介紹 ）"], cor:2},
   {text:"2. What food did we eat on our very first date? 我們首次約會吃了什麼？", opts:["A. Hotpot 火鍋","B. AYCE Hotpot 火鍋任吃","C. Sushi 壽司","D. AYCE Sushi 壽司任吃"], cor:1},
@@ -225,7 +249,27 @@ function show(id){
   $('liveScoreDisplay').style.display = (id==='guestGameScreen')?'flex':'none';
 }
 
-// SIMPLE TIMER FUNCTIONS
+// Display options for host (read-only)
+function displayHostOptions(qIdx) {
+  const q = Q[qIdx];
+  const container = $('hostOptionsContainer');
+  if (!container) return;
+  
+  container.innerHTML = '<p class="small-text" style="margin-bottom:0.5rem;">📋 Answer Choices:</p>';
+  q.opts.forEach((opt, idx) => {
+    const optDiv = document.createElement('div');
+    optDiv.className = 'host-option-item';
+    if (idx === q.cor) {
+      optDiv.classList.add('host-correct-indicator');
+      optDiv.innerHTML = `✓ ${opt} <span style="float:right; font-size:0.7rem;">(Correct Answer)</span>`;
+    } else {
+      optDiv.textContent = opt;
+    }
+    container.appendChild(optDiv);
+  });
+}
+
+// TIMER FUNCTIONS
 function stopHostTimer() {
   if (hostTimerInterval) {
     clearInterval(hostTimerInterval);
@@ -234,7 +278,7 @@ function stopHostTimer() {
 }
 
 function startHostTimer() {
-  stopHostTimer(); // Always stop existing timer first
+  stopHostTimer();
   
   let timeLeft = 20;
   const timerElem = $('hostTimerSeconds');
@@ -244,6 +288,9 @@ function startHostTimer() {
   if (timerElem) timerElem.textContent = timeLeft;
   if (msgSpan) msgSpan.textContent = "⏳ Answering in progress...";
   if (timerDiv) timerDiv.classList.remove('timer-urgent');
+  
+  // Record when the question started for speed scoring
+  questionStartTime = Date.now();
   
   hostTimerInterval = setInterval(() => {
     if (!isHost) {
@@ -267,7 +314,22 @@ function startHostTimer() {
   }, 1000);
 }
 
-// Host functions - DIRECT NAVIGATION NO COMPLEX LISTENERS
+// Calculate points based on how fast the answer was (0-20 seconds)
+// Faster = more points, up to 2000 points for instant answer
+function calculatePoints(reactionTimeMs) {
+  const maxPoints = 2000;
+  const minPoints = 500;
+  const maxTimeMs = 20000; // 20 seconds
+  
+  if (reactionTimeMs >= maxTimeMs) return minPoints;
+  if (reactionTimeMs <= 0) return maxPoints;
+  
+  // Linear scale: faster = more points
+  const points = maxPoints - ((reactionTimeMs / maxTimeMs) * (maxPoints - minPoints));
+  return Math.round(points);
+}
+
+// Host functions
 function hostStartGame(){
   gameRef.set({ 
     state: 'playing', 
@@ -282,6 +344,8 @@ function hostStartGame(){
     $('hostQNum').textContent = '1';
     $('hostQText').textContent = Q[0].text;
     $('hostNextBtn').textContent = Q.length === 1 ? '🏆 Finish & Show Results' : '▶ Next Question';
+    // Display options for host
+    displayHostOptions(0);
     // Start the timer
     startHostTimer();
   });
@@ -291,8 +355,7 @@ function hostNextQuestion() {
   const nextQ = currentQIdx + 1;
   
   if (nextQ >= Q.length) {
-    // End game
-    gameRef.update({ state: 'finished' });
+    hostEndGame();
     return;
   }
   
@@ -306,6 +369,9 @@ function hostNextQuestion() {
   $('hostQNum').textContent = currentQIdx + 1;
   $('hostQText').textContent = Q[currentQIdx].text;
   $('hostNextBtn').textContent = currentQIdx === Q.length - 1 ? '🏆 Finish & Show Results' : '▶ Next Question';
+  
+  // Display options for host
+  displayHostOptions(currentQIdx);
   
   // Reset timer display
   const timerElem = $('hostTimerSeconds');
@@ -345,12 +411,13 @@ function setupGameListener() {
     const data = snap.val();
     if(!data) return;
     
-    // For guests: handle game state changes
     if(!isHost) {
       if(data.state === 'playing' && data.currentQuestion !== undefined) {
         const qIdx = data.currentQuestion;
         if(qIdx !== currentQIdx && qIdx >= 0 && qIdx < Q.length) {
           currentQIdx = qIdx;
+          // Reset question start time for new question
+          questionStartTime = Date.now();
           renderGuestQuestion(qIdx);
         }
       } else if(data.state === 'finished') {
@@ -385,10 +452,20 @@ function guestAnswer(idx){
   const q = Q[currentQIdx];
   const correct = idx === q.cor;
   let pts = 0;
+  
   if(correct){
-    pts = 1000;
+    // Calculate points based on reaction time
+    const reactionTime = Date.now() - questionStartTime;
+    pts = calculatePoints(reactionTime);
     score += pts;
+    
+    // Show feedback with points earned
+    const secondsTaken = (reactionTime / 1000).toFixed(1);
+    $('guestFeedback').textContent = `✅ Correct! +${pts} points (Answered in ${secondsTaken}s)`;
+  } else {
+    $('guestFeedback').textContent = '❌ Incorrect';
   }
+  
   $('scoreValue').textContent = score;
   gameRef.child('answers').push({
     playerId, 
@@ -398,15 +475,16 @@ function guestAnswer(idx){
     answer: idx, 
     correct, 
     points: pts,
+    reactionTime: correct ? (Date.now() - questionStartTime) : null,
     timestamp: Date.now()
   });
+  
   const btns = document.querySelectorAll('#guestOptions .option-btn');
   btns.forEach((b,i)=>{
     b.disabled = true;
     if(i === q.cor) b.classList.add('correct-highlight');
     if(i === idx && !correct) b.classList.add('wrong-highlight');
   });
-  $('guestFeedback').textContent = correct ? '✅ Correct! +1000 points' : '❌ Incorrect';
 }
 
 function showResults(){
@@ -419,14 +497,16 @@ function showResults(){
         playerScores[a.playerId] = {
           name: a.playerName, 
           lastName: a.playerLastName, 
-          score: 0
+          score: 0,
+          correctCount: 0
         }; 
       }
       playerScores[a.playerId].score += a.points || 0;
+      if(a.correct) playerScores[a.playerId].correctCount++;
     });
     const sorted = Object.values(playerScores).sort((a,b)=>b.score-a.score);
     $('finalRankings').innerHTML = sorted.length===0 ? '<p class="small-text">No players</p>' :
-      sorted.map((p,i)=>`<div class="result-item"><span>${i===0?'🥇':i===1?'🥈':i===2?'🥉':''} ${i+1}. ${p.name} ${p.lastName}</span> <strong>${p.score} pts</strong></div>`).join('');
+      sorted.map((p,i)=>`<div class="result-item"><span>${i===0?'🥇':i===1?'🥈':i===2?'🥉':''} ${i+1}. ${p.name} ${p.lastName}</span> <strong>${p.score} pts</strong> <span class="small-text">(${p.correctCount}/10 correct)</span></div>`).join('');
     if(!isHost) $('guestResultMsg').textContent = '✨ Thank you for playing!';
     $('hostResultsResetBtn').style.display = isHost?'block':'none';
   });
@@ -471,6 +551,7 @@ $('startGameBtn').onclick = ()=>{
   pLastName=l; 
   playerId = 'guest-' + Date.now() + '-' + Math.random().toString(36).substr(2,5);
   score=0;
+  questionStartTime = Date.now();
   $('guestNameDisplay').textContent = f + ' ' + l;
   show('guestWaitingScreen');
   setupGameListener();
