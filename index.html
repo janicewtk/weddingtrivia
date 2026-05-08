@@ -100,7 +100,6 @@
 <div class="app-container" id="appContainer">
   <div class="score-pill" id="liveScoreDisplay" style="display:none;">✦ <span id="scoreValue">0</span> pts</div>
 
-  <!-- Passcode Screen (Front Page with Image) -->
   <div id="passcodeScreen" class="screen active-screen">
     <img class="front-image" id="heroImage" src="https://raw.githubusercontent.com/janicewtk/weddingtrivia/main/wedding-character-transparent%20(1).png" alt="Janice & Toby" onerror="this.style.display='none'">
     <h1 class="game-title">Janice & Toby's Trivia</h1>
@@ -111,7 +110,6 @@
     <button id="joinAsGuestBtn" style="background:#f0e9db;">🎉 Join as Guest</button>
   </div>
 
-  <!-- Name -->
   <div id="nameScreen" class="screen">
     <h1 class="game-title" style="font-size:1.6rem;">Janice & Toby's Trivia</h1>
     <h2 style="text-align:center; font-weight:300;">Welcome!</h2>
@@ -121,7 +119,6 @@
     <button id="backToPasscodeBtn" style="background:#f0e9db;">← Back</button>
   </div>
 
-  <!-- Host Dashboard -->
   <div id="hostScreen" class="screen">
     <div style="text-align:center;"><span class="host-badge">✦ Host ✦</span></div>
     <h1 class="game-title" style="font-size:1.6rem;">Janice & Toby's Trivia</h1>
@@ -135,15 +132,12 @@
         <div id="hostTimerWidget" class="host-timer" style="margin: 0.5rem 0;">
           <div class="timer-label">⏱️ TIME REMAINING</div>
           <div class="timer-digits" id="hostTimerSeconds">20</div>
-          <div class="small-text" id="timerStatusMsg">Waiting for question...</div>
+          <div class="small-text" id="timerStatusMsg">Ready</div>
         </div>
         <h2 id="hostQText" style="text-align:center; font-size:1.1rem; margin:0.5rem 0;"></h2>
-        <div class="host-control-row">
-          <button id="hostNextBtn" style="width:100%;">▶ Next Question</button>
-          <button id="hostForceNextBtn" style="background:#cdbca4;" title="Skip / Force next (stops timer)">⏩ Skip</button>
-        </div>
-        <button id="hostEndBtn" style="width:100%; margin-top:0.5rem; background:#cfbfa8;">🏆 End Game & Show Results</button>
-        <p class="small-text" style="text-align:center; margin-top:0.3rem;">Players answered: <span id="hostAnswerCount">0</span></p>
+        <button id="hostNextBtn" style="width:100%; margin-bottom:0.5rem;">▶ Next Question</button>
+        <button id="hostEndBtn" style="width:100%; margin-top:0.3rem; background:#cfbfa8;">🏆 End Game & Show Results</button>
+        <p class="small-text" style="text-align:center; margin-top:0.5rem;">Players answered: <span id="hostAnswerCount">0</span></p>
       </div>
       <button id="hostStartGameBtn" style="width:100%;">▶ Start Game</button>
       <button id="hostResetBtn" style="width:100%; margin-top:0.5rem; background:#e8d9c6;">🔄 Reset</button>
@@ -151,7 +145,6 @@
     <p class="small-text" style="text-align:center;" id="hostInfo">Players joined: 0</p>
   </div>
 
-  <!-- Guest Waiting -->
   <div id="guestWaitingScreen" class="screen">
     <h1 class="game-title" style="font-size:1.3rem;">Janice & Toby's Trivia</h1>
     <div class="waiting-screen">
@@ -161,7 +154,6 @@
     </div>
   </div>
 
-  <!-- Guest Game -->
   <div id="guestGameScreen" class="screen">
     <h1 class="game-title" style="font-size:1.2rem;">Janice & Toby's Trivia</h1>
     <span class="small-text" id="guestQCounter">Question 1/10</span>
@@ -171,7 +163,6 @@
     <p class="small-text" style="text-align:center;" id="guestFeedback"></p>
   </div>
 
-  <!-- Results -->
   <div id="resultScreen" class="screen">
     <h1 class="game-title" style="font-size:1.4rem;">Janice & Toby's Trivia</h1>
     <h2 style="text-align:center; font-weight:300;">🏁 Final Scores</h2>
@@ -180,7 +171,6 @@
     <button id="hostResultsResetBtn" style="display:none; background:#e8d9c6;">🔄 Reset</button>
   </div>
 
-  <!-- Reset Modal -->
   <div id="resetModal" style="display:none; position:fixed; top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.25);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center;">
     <div style="background:#fefcf9;padding:2rem;border-radius:2rem;max-width:320px;text-align:center;">
       <h3 style="font-family:'Cormorant Garamond',serif;">Reset game?</h3>
@@ -225,8 +215,6 @@ const PASS = "0709";
 let isHost = false, pName = "", pLastName = "", playerId = "", score = 0;
 let currentQIdx = -1, answered = false;
 let hostTimerInterval = null;
-let hostTimeLeft = 20;
-let isTimerActive = false;
 let isGameListenerSetup = false;
 
 function $(id){ return document.getElementById(id); }
@@ -237,73 +225,50 @@ function show(id){
   $('liveScoreDisplay').style.display = (id==='guestGameScreen')?'flex':'none';
 }
 
-// Host Timer Logic - SIMPLIFIED AND FIXED
+// SIMPLE TIMER FUNCTIONS
 function stopHostTimer() {
   if (hostTimerInterval) {
     clearInterval(hostTimerInterval);
     hostTimerInterval = null;
   }
-  isTimerActive = false;
 }
 
 function startHostTimer() {
-  // Stop any existing timer first
-  stopHostTimer();
+  stopHostTimer(); // Always stop existing timer first
   
-  // Reset to 20 seconds
-  hostTimeLeft = 20;
-  isTimerActive = true;
-  
-  // Update display
+  let timeLeft = 20;
   const timerElem = $('hostTimerSeconds');
-  if (timerElem) timerElem.textContent = hostTimeLeft;
-  
   const msgSpan = $('timerStatusMsg');
-  if (msgSpan) msgSpan.textContent = "⏳ Answering in progress...";
-  
   const timerDiv = $('hostTimerWidget');
+  
+  if (timerElem) timerElem.textContent = timeLeft;
+  if (msgSpan) msgSpan.textContent = "⏳ Answering in progress...";
   if (timerDiv) timerDiv.classList.remove('timer-urgent');
   
-  // Start new timer
   hostTimerInterval = setInterval(() => {
-    if (!isHost || !isTimerActive) {
+    if (!isHost) {
+      stopHostTimer();
       return;
     }
     
-    if (hostTimeLeft <= 1) {
-      // Time's up!
+    timeLeft--;
+    
+    if (timerElem) timerElem.textContent = timeLeft;
+    
+    if (timeLeft <= 5 && timeLeft > 0) {
+      if (timerDiv) timerDiv.classList.add('timer-urgent');
+    }
+    
+    if (timeLeft <= 0) {
       stopHostTimer();
-      const msgSpan = $('timerStatusMsg');
       if (msgSpan) msgSpan.textContent = "⏰ TIME EXPIRED! Press Next to continue.";
-      const timerDivEx = $('hostTimerWidget');
-      if (timerDivEx) timerDivEx.classList.add('timer-urgent');
-    } else {
-      hostTimeLeft--;
-      const timerElem = $('hostTimerSeconds');
-      if (timerElem) timerElem.textContent = hostTimeLeft;
-      
-      // Add urgent style when 5 seconds left
-      if (hostTimeLeft <= 5) {
-        const timerDivUrgent = $('hostTimerWidget');
-        if (timerDivUrgent) timerDivUrgent.classList.add('timer-urgent');
-      }
+      if (timerDiv) timerDiv.classList.add('timer-urgent');
     }
   }, 1000);
 }
 
-function resetTimerDisplay() {
-  stopHostTimer();
-  const timerElem = $('hostTimerSeconds');
-  if (timerElem) timerElem.textContent = '20';
-  const msgSpan = $('timerStatusMsg');
-  if (msgSpan) msgSpan.textContent = "Ready for next question";
-  const timerDiv = $('hostTimerWidget');
-  if (timerDiv) timerDiv.classList.remove('timer-urgent');
-}
-
-// Host functions
+// Host functions - DIRECT NAVIGATION NO COMPLEX LISTENERS
 function hostStartGame(){
-  // Reset any existing data and start fresh
   gameRef.set({ 
     state: 'playing', 
     currentQuestion: 0, 
@@ -313,33 +278,48 @@ function hostStartGame(){
     $('hostStartGameBtn').style.display = 'none';
     $('hostGameControls').style.display = 'block';
     currentQIdx = 0;
-    updateHostDisplay(0);
-    // Start the timer for question 1
+    // Display first question
+    $('hostQNum').textContent = '1';
+    $('hostQText').textContent = Q[0].text;
+    $('hostNextBtn').textContent = Q.length === 1 ? '🏆 Finish & Show Results' : '▶ Next Question';
+    // Start the timer
     startHostTimer();
   });
 }
 
-function hostNextQuestion(){
-  const next = currentQIdx + 1;
-  if(next >= Q.length){ 
-    hostEndGame(); 
-    return; 
-  }
-  // Stop current timer
-  stopHostTimer();
-  // Update to next question
-  gameRef.update({ currentQuestion: next });
-}
-
-function hostForceNextQuestion() {
-  const next = currentQIdx + 1;
-  if(next >= Q.length){
-    hostEndGame();
+function hostNextQuestion() {
+  const nextQ = currentQIdx + 1;
+  
+  if (nextQ >= Q.length) {
+    // End game
+    gameRef.update({ state: 'finished' });
     return;
   }
-  // Stop current timer and force next
+  
+  // Stop timer
   stopHostTimer();
-  gameRef.update({ currentQuestion: next });
+  
+  // Update to next question
+  currentQIdx = nextQ;
+  
+  // Update display
+  $('hostQNum').textContent = currentQIdx + 1;
+  $('hostQText').textContent = Q[currentQIdx].text;
+  $('hostNextBtn').textContent = currentQIdx === Q.length - 1 ? '🏆 Finish & Show Results' : '▶ Next Question';
+  
+  // Reset timer display
+  const timerElem = $('hostTimerSeconds');
+  const msgSpan = $('timerStatusMsg');
+  const timerDiv = $('hostTimerWidget');
+  if (timerElem) timerElem.textContent = '20';
+  if (msgSpan) msgSpan.textContent = "⏳ Answering in progress...";
+  if (timerDiv) timerDiv.classList.remove('timer-urgent');
+  
+  // Start fresh timer
+  startHostTimer();
+  
+  // Update Firebase for guests
+  gameRef.update({ currentQuestion: currentQIdx });
 }
 
 function hostEndGame(){ 
@@ -347,23 +327,12 @@ function hostEndGame(){
   gameRef.update({ state: 'finished' }); 
 }
 
-function updateHostDisplay(qIdx){
-  currentQIdx = qIdx;
-  $('hostQNum').textContent = qIdx + 1;
-  $('hostQText').textContent = Q[qIdx].text;
-  $('hostNextBtn').textContent = qIdx === Q.length - 1 ? '🏆 Finish & Show Results' : '▶ Next Question';
-  
-  // Reset and start timer for the new question
-  if (isHost && $('hostGameControls').style.display === 'block') {
-    startHostTimer();
-  }
-}
-
 // Firebase listeners
 function setupGameListener() {
   if (isGameListenerSetup) return;
   isGameListenerSetup = true;
   
+  // Listen for answer counts
   gameRef.child('answers').on('value', snap => {
     if(!isHost) return;
     const answers = snap.val() || {};
@@ -371,29 +340,22 @@ function setupGameListener() {
     $('hostAnswerCount').textContent = count;
   });
   
-  // Main game state listener
+  // Main listener for guests
   gameRef.on('value', (snap) => {
     const data = snap.val();
     if(!data) return;
     
-    // For guests: transition from waiting to game when host starts
-    if(!isHost && data.state === 'playing') {
-      const qIdx = data.currentQuestion;
-      if(qIdx !== currentQIdx && qIdx >= 0 && qIdx < Q.length) {
-        currentQIdx = qIdx;
-        renderGuestQuestion(qIdx);
+    // For guests: handle game state changes
+    if(!isHost) {
+      if(data.state === 'playing' && data.currentQuestion !== undefined) {
+        const qIdx = data.currentQuestion;
+        if(qIdx !== currentQIdx && qIdx >= 0 && qIdx < Q.length) {
+          currentQIdx = qIdx;
+          renderGuestQuestion(qIdx);
+        }
+      } else if(data.state === 'finished') {
+        showResults();
       }
-    } 
-    // For host: update display when question changes
-    else if(isHost && data.state === 'playing') {
-      if(data.currentQuestion !== currentQIdx && data.currentQuestion !== undefined) {
-        updateHostDisplay(data.currentQuestion);
-      }
-    }
-    // If game is finished, show results
-    else if(data.state === 'finished') {
-      if(isHost) stopHostTimer();
-      showResults();
     }
   });
 }
@@ -485,7 +447,6 @@ $('submitPasscodeBtn').onclick = ()=>{
       colorDark: "#4d3e2e",
       colorLight: "#fff"
     });
-    resetTimerDisplay();
     $('hostGameControls').style.display = 'none';
     setupGameListener();
   } else {
@@ -513,17 +474,12 @@ $('startGameBtn').onclick = ()=>{
   $('guestNameDisplay').textContent = f + ' ' + l;
   show('guestWaitingScreen');
   setupGameListener();
-  // Guests stay on waiting screen until host starts the game
 };
 
 $('hostStartGameBtn').onclick = hostStartGame;
 $('hostNextBtn').onclick = () => {
   if (!isHost) return;
   hostNextQuestion();
-};
-$('hostForceNextBtn').onclick = () => {
-  if (!isHost) return;
-  hostForceNextQuestion();
 };
 $('hostEndBtn').onclick = () => { hostEndGame(); };
 $('hostResetBtn').onclick = ()=>{ stopHostTimer(); $('resetModal').style.display='flex'; };
@@ -547,7 +503,6 @@ setInterval(()=>{
   }
 }, 2000);
 
-// Start on passcode screen
 show('passcodeScreen');
 </script>
 </body>
