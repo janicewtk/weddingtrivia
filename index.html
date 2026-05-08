@@ -101,7 +101,7 @@
   <div class="score-pill" id="liveScoreDisplay" style="display:none;">✦ <span id="scoreValue">0</span> pts</div>
 
   <!-- Passcode Screen (Front Page with Image) -->
-  <div id="passcodeScreen" class="screen">
+  <div id="passcodeScreen" class="screen active-screen">
     <img class="front-image" id="heroImage" src="https://raw.githubusercontent.com/janicewtk/weddingtrivia/main/wedding-character-transparent%20(1).png" alt="Janice & Toby" onerror="this.style.display='none'">
     <h1 class="game-title">Janice & Toby's Trivia</h1>
     <p class="small-text" style="text-align:center; margin:0.5rem 0 1.5rem;">Enter host passcode</p>
@@ -313,7 +313,6 @@ function refreshHostTimerForCurrentQuestion() {
 
 // Host functions
 function hostStartGame(){
-  // Clear any existing data and start fresh
   gameRef.set({ 
     state: 'playing', 
     currentQuestion: 0, 
@@ -363,7 +362,7 @@ function updateHostDisplay(qIdx){
   }
 }
 
-// Firebase listeners - ONLY setup once
+// Firebase listeners - ONLY once, and guests ONLY move when host starts game
 function setupGameListener() {
   if (isGameListenerSetup) return;
   isGameListenerSetup = true;
@@ -375,18 +374,22 @@ function setupGameListener() {
     $('hostAnswerCount').textContent = count;
   });
   
+  // Main game state listener - guests only move to game screen when state becomes 'playing'
   gameRef.on('value', (snap) => {
     const data = snap.val();
     if(!data) return;
     
-    // Only auto-navigate guests if they are NOT host and NOT already on game screen
+    // For guests: only transition from waiting to game when host starts the game
     if(!isHost && data.state === 'playing') {
       const qIdx = data.currentQuestion;
+      // Only move to game screen if we're currently on waiting screen and game just started
       if(qIdx !== currentQIdx && qIdx >= 0 && qIdx < Q.length) {
         currentQIdx = qIdx;
         renderGuestQuestion(qIdx);
       }
-    } else if(data.state === 'finished') {
+    } 
+    // If game is finished, show results
+    else if(data.state === 'finished') {
       if(isHost) stopHostTimer();
       showResults();
     }
@@ -509,14 +512,8 @@ $('startGameBtn').onclick = ()=>{
   show('guestWaitingScreen');
   setupGameListener();
   
-  // Check if game already started
-  gameRef.once('value').then(snap => {
-    const data = snap.val();
-    if(data && data.state === 'playing' && data.currentQuestion !== undefined && data.currentQuestion >= 0) {
-      currentQIdx = data.currentQuestion;
-      renderGuestQuestion(currentQIdx);
-    }
-  });
+  // REMOVED: The automatic check that was moving guests to questions
+  // Guests now stay on waiting screen until host starts the game
 };
 
 $('hostStartGameBtn').onclick = hostStartGame;
@@ -552,7 +549,7 @@ setInterval(()=>{
   }
 }, 2000);
 
-// Start on passcode screen - ensure we always show front page first
+// Start on passcode screen
 show('passcodeScreen');
 </script>
 </body>
