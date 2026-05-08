@@ -40,7 +40,7 @@
     .result-item:last-child { border-bottom: none; }
     .small-text { font-size: 0.8rem; color: #8b7a67; }
     .host-badge { background: #d9cdbc; padding: 0.3rem 1rem; border-radius: 2rem; font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; }
-    .qr-section { background: #fff; padding: 1.5rem; border-radius: 2rem; text-align: center; margin: 0.8rem 0; box-shadow: 0 8px 25px rgba(0,0,0,0.05); }
+    .qr-section { background: #fff; padding: 1rem; border-radius: 2rem; text-align: center; margin: 0.8rem 0; box-shadow: 0 8px 25px rgba(0,0,0,0.05); }
     .host-panel { background: #f2eadd; border-radius: 2rem; padding: 1.5rem; box-shadow: 0 8px 20px rgba(0,0,0,0.04); }
     .flex-row { display: flex; gap: 0.7rem; flex-wrap: wrap; }
     .waiting-screen { text-align: center; padding: 2rem; background: #f5efe4; border-radius: 2rem; }
@@ -225,7 +225,7 @@ const PASS = "0709";
 let isHost = false, pName = "", pLastName = "", playerId = "", score = 0;
 let currentQIdx = -1, answered = false;
 let hostTimerInterval = null;
-let hostTimeLeft = 20; // Changed to 20 seconds
+let hostTimeLeft = 20;
 let isTimerActive = false;
 let isGameListenerSetup = false;
 
@@ -237,7 +237,7 @@ function show(id){
   $('liveScoreDisplay').style.display = (id==='guestGameScreen')?'flex':'none';
 }
 
-// Host Timer Logic
+// Host Timer Logic - SIMPLIFIED AND FIXED
 function stopHostTimer() {
   if (hostTimerInterval) {
     clearInterval(hostTimerInterval);
@@ -246,79 +246,64 @@ function stopHostTimer() {
   isTimerActive = false;
 }
 
-function startHostTimer(seconds = 20, onExpireCallback) {
+function startHostTimer() {
+  // Stop any existing timer first
   stopHostTimer();
-  hostTimeLeft = seconds;
+  
+  // Reset to 20 seconds
+  hostTimeLeft = 20;
   isTimerActive = true;
-  updateTimerDisplay();
+  
+  // Update display
+  const timerElem = $('hostTimerSeconds');
+  if (timerElem) timerElem.textContent = hostTimeLeft;
+  
+  const msgSpan = $('timerStatusMsg');
+  if (msgSpan) msgSpan.textContent = "⏳ Answering in progress...";
   
   const timerDiv = $('hostTimerWidget');
   if (timerDiv) timerDiv.classList.remove('timer-urgent');
   
+  // Start new timer
   hostTimerInterval = setInterval(() => {
     if (!isHost || !isTimerActive) {
       return;
     }
+    
     if (hostTimeLeft <= 1) {
       // Time's up!
       stopHostTimer();
-      if (onExpireCallback) onExpireCallback();
       const msgSpan = $('timerStatusMsg');
-      if (msgSpan) msgSpan.textContent = "⏰ Time's up! Use Skip or Next to continue.";
+      if (msgSpan) msgSpan.textContent = "⏰ TIME EXPIRED! Press Next to continue.";
       const timerDivEx = $('hostTimerWidget');
       if (timerDivEx) timerDivEx.classList.add('timer-urgent');
     } else {
       hostTimeLeft--;
-      updateTimerDisplay();
+      const timerElem = $('hostTimerSeconds');
+      if (timerElem) timerElem.textContent = hostTimeLeft;
+      
       // Add urgent style when 5 seconds left
-      if (hostTimeLeft <= 5 && hostTimeLeft > 0) {
+      if (hostTimeLeft <= 5) {
         const timerDivUrgent = $('hostTimerWidget');
         if (timerDivUrgent) timerDivUrgent.classList.add('timer-urgent');
-      } else {
-        const timerDivUrgent = $('hostTimerWidget');
-        if (timerDivUrgent && hostTimeLeft > 5) timerDivUrgent.classList.remove('timer-urgent');
       }
     }
   }, 1000);
 }
 
-function updateTimerDisplay() {
-  const timerElem = $('hostTimerSeconds');
-  if (timerElem) timerElem.textContent = hostTimeLeft;
-  const msgSpan = $('timerStatusMsg');
-  if (msgSpan && isTimerActive) {
-    if (hostTimeLeft > 0) msgSpan.textContent = "⏳ Answering in progress...";
-    else msgSpan.textContent = "⌛ Expired";
-  }
-}
-
-function resetHostTimerUI() {
+function resetTimerDisplay() {
   stopHostTimer();
   const timerElem = $('hostTimerSeconds');
-  if (timerElem) timerElem.textContent = '20'; // Changed to 20
+  if (timerElem) timerElem.textContent = '20';
   const msgSpan = $('timerStatusMsg');
   if (msgSpan) msgSpan.textContent = "Ready for next question";
   const timerDiv = $('hostTimerWidget');
   if (timerDiv) timerDiv.classList.remove('timer-urgent');
 }
 
-// Host triggers a new question: reset UI, start 20s timer
-function refreshHostTimerForCurrentQuestion() {
-  if (!isHost) return;
-  resetHostTimerUI();
-  // start new 20-second timer with auto-expire
-  startHostTimer(20, () => {
-    if (isHost) {
-      const msgSpan = $('timerStatusMsg');
-      if (msgSpan) msgSpan.textContent = "⏰ TIME EXPIRED! Press Skip or Next to proceed.";
-      const timerDivEx = $('hostTimerWidget');
-      if (timerDivEx) timerDivEx.classList.add('timer-urgent');
-    }
-  });
-}
-
 // Host functions
 function hostStartGame(){
+  // Reset any existing data and start fresh
   gameRef.set({ 
     state: 'playing', 
     currentQuestion: 0, 
@@ -327,8 +312,10 @@ function hostStartGame(){
   }).then(() => {
     $('hostStartGameBtn').style.display = 'none';
     $('hostGameControls').style.display = 'block';
+    currentQIdx = 0;
     updateHostDisplay(0);
-    // Timer will be started by updateHostDisplay -> refreshHostTimerForCurrentQuestion
+    // Start the timer for question 1
+    startHostTimer();
   });
 }
 
@@ -338,8 +325,9 @@ function hostNextQuestion(){
     hostEndGame(); 
     return; 
   }
-  // Stop current timer before moving to next question
+  // Stop current timer
   stopHostTimer();
+  // Update to next question
   gameRef.update({ currentQuestion: next });
 }
 
@@ -349,7 +337,7 @@ function hostForceNextQuestion() {
     hostEndGame();
     return;
   }
-  // Stop current timer before skipping
+  // Stop current timer and force next
   stopHostTimer();
   gameRef.update({ currentQuestion: next });
 }
@@ -365,9 +353,9 @@ function updateHostDisplay(qIdx){
   $('hostQText').textContent = Q[qIdx].text;
   $('hostNextBtn').textContent = qIdx === Q.length - 1 ? '🏆 Finish & Show Results' : '▶ Next Question';
   
-  // Always reset and restart timer when displaying a new question
+  // Reset and start timer for the new question
   if (isHost && $('hostGameControls').style.display === 'block') {
-    refreshHostTimerForCurrentQuestion();
+    startHostTimer();
   }
 }
 
@@ -396,7 +384,7 @@ function setupGameListener() {
         renderGuestQuestion(qIdx);
       }
     } 
-    // For host: update display when question changes (but don't restart timer twice)
+    // For host: update display when question changes
     else if(isHost && data.state === 'playing') {
       if(data.currentQuestion !== currentQIdx && data.currentQuestion !== undefined) {
         updateHostDisplay(data.currentQuestion);
@@ -497,7 +485,7 @@ $('submitPasscodeBtn').onclick = ()=>{
       colorDark: "#4d3e2e",
       colorLight: "#fff"
     });
-    resetHostTimerUI();
+    resetTimerDisplay();
     $('hostGameControls').style.display = 'none';
     setupGameListener();
   } else {
