@@ -29,7 +29,7 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     input { font-family: 'Montserrat', sans-serif; border-radius: 2.5rem; padding: 1rem 1.5rem; background: #f5f0e8; font-size: 0.95rem; border: none; outline: none; color: #3e3a37; }
     input:focus { background: #efe8db; }
-    button { font-family: 'Montserrat', sans-serif; border-radius: 2.5rem; padding: 1rem 1.5rem; background: #e0d3bf; font-size: 0.95rem; border: none; cursor: pointer; font-weight: 500; color: #3a3229; box-shadow: 0 4px 12px rgba(140,110,70,0.1); transition: all 0.2s; }
+    button { font-family: 'Montserrat', sans-serif; border-radius: 2.5rem; padding: 1rem 1.5rem; background: #e0d3bf; font-size: 0.95rem; border: none; cursor: pointer; font-weight: 500; color: #3a322f; }
     button:hover:not(:disabled) { background: #d4c4aa; transform: translateY(-1px); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     .option-btn { text-align: left; background: #f5f0e8; width: 100%; box-shadow: none; }
@@ -222,18 +222,19 @@ const Q = [
   {text:"1. How did we meet? 我們是怎麼認識的？", opts:["A. Tinder","B. Coffee Meets Bagel","C. Hinge","D. Organically through mutuals（透過朋友介紹 ）"], cor:2},
   {text:"2. What food did we eat on our very first date? 我們首次約會吃了什麼？", opts:["A. Hotpot 火鍋","B. AYCE Hotpot 火鍋任吃","C. Sushi 壽司","D. AYCE Sushi 壽司任吃"], cor:1},
   {text:"3. What is OUR go-to food spot? 我們最常去吃的餐廳是哪一家？", opts:["A. Chipotle","B. In-N-Out","C. Poki One N Half","D. K-Sandwich"], cor:3},
-  {text:"4. Where exactly did the proposal happen? 求婚是在哪裡發生的？", opts:["A. Sunset Cliffs","B. Our Home - Master Bedroom 家裡-主臥室","C. Our Home- Toby's Office 家裡-辦公室","D. Our Home- Kitchen 家裡-廚房"], cor:3},
+  {text:"4. Where exactly did the proposal happen? 求婚是在哪裡發生的？", opts:["A. Sunset Cliffs","B. Our Home - Master Bedroom 家裡-主臥室","C. Our Home- Toby's Office 家裡-辦公室","D. Park"], cor:1},
   {text:"5. What is the name of our beloved furry kid? 我們心愛的毛小孩叫什麼名字？", opts:["A. Lucy","B. Liza","C. Lizzy","D. Lily"], cor:2},
-  {text:"6. Including our current pet, how many different species of animals have we had together? 包括現有的寵物在內，我們一起養過幾種不同種類的動物？", opts:["A. 2","B. 1","C. 3","D. 4"], cor:0},
+  {text:"6. Including our current pet, how many different species of animals have we had together? 包括現有的寵物在內，我們一起養過幾種不同種類的動物？", opts:["A. 2","B. 1","C. 3","D. 4"], cor:2},
   {text:"7. What is our shared favorite color? 我們共同最喜歡的顏色是？", opts:["A. Yellow 黃色","B. Black 黑色","C. Blue 藍色","D. Beige 米色"], cor:2},
   {text:"8. What is our shared favorite holiday? 我们共同最愛的節日是什麼?", opts:["A. Thanksgiving 感恩節","B. Christmas 聖誕節","C. Chinese New Year 春節","D. New Year 元旦"], cor:1},
-  {text:"9. When did we signed the paper and officially make it legal? 我們是什麼時候登記，正式成為合法夫妻的？", opts:["A. 01/11/2024","B. 01/11/2025","C. 01/11/2026","D. 05/23/2026"], cor:0},
+  {text:"9. When did we signed the paper and officially make it legal? 我們是什麼時候登記，正式成為合法夫妻的？", opts:["A. 01/11/2024","B. 01/11/2025","C. 01/11/2026","D. 05/23/2025"], cor:0},
   {text:"10. Exactly how many months have we been together as of today? 到今天為止，我們在一起幾個月了？", opts:["A. 44 months","B. 45 months","C. 46 months","D. 47months"], cor:2}
 ];
 
 const PASS = "0709";
 let isHost = false, pName = "", pLastName = "", playerId = "", score = 0;
 let currentQIdx = -1, answered = false;
+let gameHasStarted = false; // Track if host has started game
 
 // Timer related variables (host only)
 let hostTimerInterval = null;
@@ -341,6 +342,7 @@ function refreshHostTimerForCurrentQuestion() {
 
 // Host functions
 function hostStartGame(){
+  gameHasStarted = true;
   gameRef.set({ state: 'playing', currentQuestion: 0, totalQuestions: Q.length, startedAt: Date.now() });
   $('hostStartGameBtn').style.display = 'none';
   $('hostGameControls').style.display = 'block';
@@ -397,21 +399,26 @@ gameRef.child('answers').on('value', snap => {
 gameRef.on('value', snap => {
   const data = snap.val();
   if(!data) return;
+  
   if(data.state === 'playing' && isHost){ 
     // if host sees a new currentQuestion index, update
     if(data.currentQuestion !== currentQIdx) {
       updateHostDisplay(data.currentQuestion);
     }
   }
-  if(data.state === 'playing' && !isHost){
+  
+  if(data.state === 'playing' && !isHost && gameHasStarted){
+    // Guests should only see questions if gameHasStarted flag is true
     const qIdx = data.currentQuestion;
     if(qIdx !== currentQIdx){ 
       currentQIdx = qIdx; 
       renderGuestQuestion(qIdx); 
     }
   }
+  
   if(data.state === 'finished'){ 
     stopHostTimer();
+    gameHasStarted = false;
     showResults(); 
   }
 });
@@ -481,6 +488,7 @@ function showResults(){
 $('submitPasscodeBtn').onclick = ()=>{
   if($('passcodeInput').value.trim() === PASS){
     isHost = true; playerId = 'host-' + Date.now();
+    gameHasStarted = false;
     $('passcodeInput').value = '';
     show('hostScreen');
     $('qrcodeContainer').innerHTML = '';
@@ -500,6 +508,7 @@ $('startGameBtn').onclick = ()=>{
   pName=f; pLastName=l; playerId = 'guest-' + Date.now() + '-' + Math.random().toString(36).substr(2,5);
   score=0;
   $('guestNameDisplay').textContent = f;
+  // Show waiting screen, and wait for host to start the game
   show('guestWaitingScreen');
 };
 
@@ -517,7 +526,7 @@ $('hostForceNextBtn').onclick = () => {
 $('hostEndBtn').onclick = () => { stopHostTimer(); hostEndGame(); };
 $('hostResetBtn').onclick = ()=>{ stopHostTimer(); $('resetModal').style.display='flex'; };
 $('hostResultsResetBtn').onclick = ()=>{ stopHostTimer(); $('resetModal').style.display='flex'; };
-$('confirmResetBtn').onclick = ()=>{ $('resetModal').style.display='none'; stopHostTimer(); gameRef.remove(); location.reload(); };
+$('confirmResetBtn').onclick = ()=>{ $('resetModal').style.display='none'; stopHostTimer(); gameHasStarted = false; gameRef.remove(); location.reload(); };
 $('cancelResetBtn').onclick = ()=>$('resetModal').style.display='none';
 $('resetModal').onclick = (e)=>{if(e.target===$('resetModal'))$('resetModal').style.display='none';};
 
