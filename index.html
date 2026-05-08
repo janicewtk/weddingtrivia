@@ -47,14 +47,68 @@
     .status-badge { display: inline-block; padding: 0.4rem 1rem; border-radius: 2rem; font-size: 0.8rem; font-weight: 500; }
     .status-waiting { background: #f5efe4; color: #8b7a67; }
     .status-live { background: #d4dfcc; color: #4a5e3f; }
+    /* Host Timer Styles */
+    .host-timer {
+      background: #efe2d1;
+      border-radius: 3rem;
+      padding: 0.5rem 1rem;
+      text-align: center;
+      margin-bottom: 1rem;
+      transition: all 0.2s ease;
+    }
+    .timer-digits {
+      font-family: 'Montserrat', monospace;
+      font-size: 2rem;
+      font-weight: 600;
+      letter-spacing: 2px;
+      color: #4a3b2c;
+    }
+    .timer-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #7d6b55;
+    }
+    .timer-urgent {
+      background: #e6c8b5;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0% { background: #e6c8b5; }
+      50% { background: #dbbc9e; }
+      100% { background: #e6c8b5; }
+    }
+    .host-control-row {
+      display: flex;
+      gap: 0.6rem;
+      align-items: center;
+      margin-top: 0.3rem;
+    }
+    .host-control-row button {
+      flex: 1;
+      padding: 0.7rem 0.5rem;
+    }
+    /* Front page image styling */
+    .front-image {
+      width: 100%;
+      border-radius: 1.5rem;
+      margin: 0.5rem 0 1rem 0;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+      object-fit: cover;
+    }
   </style>
 </head>
 <body>
 <div class="app-container" id="appContainer">
   <div class="score-pill" id="liveScoreDisplay" style="display:none;">✦ <span id="scoreValue">0</span> pts</div>
 
-  <!-- Passcode -->
+  <!-- Passcode Screen (Front Page with Image) -->
   <div id="passcodeScreen" class="screen active-screen">
+    <!-- ============================================= -->
+    <!-- IMAGE PLACEHOLDER - Replace src with your image URL -->
+    <!-- ============================================= -->
+    <img class="front-image" id="heroImage" src="https://github.com/janicewtk/weddingtrivia/blob/20ccb6d17f2c82e831f8e3d946f1974ab5b9fd94/wedding-character-transparent%20(1).png" alt="Janice & Toby" onerror="this.style.display='none'">
+    <!-- ============================================= -->
     <h1 class="game-title">Janice & Toby's Trivia</h1>
     <p class="small-text" style="text-align:center; margin:0.5rem 0 1.5rem;">Enter host passcode</p>
     <input type="password" id="passcodeInput" placeholder="Passcode" inputmode="numeric">
@@ -84,8 +138,17 @@
     <div class="host-panel">
       <div id="hostGameControls" style="display:none;">
         <p class="small-text" style="text-align:center;">Question <span id="hostQNum">1</span>/10</p>
+        <!-- Host Timer Display (only visible on host side) -->
+        <div id="hostTimerWidget" class="host-timer" style="margin: 0.5rem 0;">
+          <div class="timer-label">⏱️ TIME REMAINING</div>
+          <div class="timer-digits" id="hostTimerSeconds">30</div>
+          <div class="small-text" id="timerStatusMsg">Waiting for question...</div>
+        </div>
         <h2 id="hostQText" style="text-align:center; font-size:1.1rem; margin:0.5rem 0;"></h2>
-        <button id="hostNextBtn" style="width:100%;">▶ Next Question</button>
+        <div class="host-control-row">
+          <button id="hostNextBtn" style="width:100%;">▶ Next Question</button>
+          <button id="hostForceNextBtn" style="background:#cdbca4;" title="Skip / Force next (stops timer)">⏩ Skip</button>
+        </div>
         <button id="hostEndBtn" style="width:100%; margin-top:0.5rem; background:#cfbfa8;">🏆 End Game & Show Results</button>
         <p class="small-text" style="text-align:center; margin-top:0.3rem;">Players answered: <span id="hostAnswerCount">0</span></p>
       </div>
@@ -139,7 +202,7 @@
 
 <script>
 // ============================================
-// 🔥 YOUR FIREBASE CONFIG
+// FIREBASE CONFIG (same as original)
 // ============================================
 const firebaseConfig = {
   apiKey: "AIzaSyDO_2JQio2ugr2vDQE-5z5wgzcF3GhBkCw",
@@ -172,35 +235,158 @@ const PASS = "0709";
 let isHost = false, pName = "", pLastName = "", playerId = "", score = 0;
 let currentQIdx = -1, answered = false;
 
-function $(id){return document.getElementById(id);}
+// Timer related variables (host only)
+let hostTimerInterval = null;
+let hostTimeLeft = 30;
+let isTimerActive = false;
+
+// Helper functions
+function $(id){ return document.getElementById(id); }
 function show(id){
   ['passcodeScreen','nameScreen','hostScreen','guestWaitingScreen','guestGameScreen','resultScreen'].forEach(s=>$(s).classList.remove('active-screen'));
   $(id).classList.add('active-screen');
   $('liveScoreDisplay').style.display = (id==='guestGameScreen')?'flex':'none';
 }
 
+// Host Timer Logic
+function stopHostTimer() {
+  if (hostTimerInterval) {
+    clearInterval(hostTimerInterval);
+    hostTimerInterval = null;
+  }
+  isTimerActive = false;
+}
+
+function startHostTimer(seconds = 30, onExpireCallback) {
+  stopHostTimer();
+  hostTimeLeft = seconds;
+  isTimerActive = true;
+  updateTimerDisplay();
+  
+  // Remove urgency class initially
+  const timerDiv = $('hostTimerWidget');
+  if (timerDiv) timerDiv.classList.remove('timer-urgent');
+  
+  hostTimerInterval = setInterval(() => {
+    if (!isHost) {
+      // safety: if not host, clear
+      stopHostTimer();
+      return;
+    }
+    if (!isTimerActive) {
+      // timer manually stopped
+      return;
+    }
+    if (hostTimeLeft <= 1) {
+      // Time's up!
+      stopHostTimer();
+      if (onExpireCallback) onExpireCallback();
+      // Auto force next question? But host can decide. We just mark timer expired visually.
+      const msgSpan = $('timerStatusMsg');
+      if (msgSpan) msgSpan.textContent = "⏰ Time's up! Use Skip or Next to continue.";
+      // Disable any extra interaction? Just show warning.
+    } else {
+      hostTimeLeft--;
+      updateTimerDisplay();
+      // Add urgent style when 5 seconds left
+      if (hostTimeLeft <= 5 && hostTimeLeft > 0) {
+        const timerDivUrgent = $('hostTimerWidget');
+        if (timerDivUrgent) timerDivUrgent.classList.add('timer-urgent');
+      } else {
+        const timerDivUrgent = $('hostTimerWidget');
+        if (timerDivUrgent && hostTimeLeft > 5) timerDivUrgent.classList.remove('timer-urgent');
+      }
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const timerElem = $('hostTimerSeconds');
+  if (timerElem) timerElem.textContent = hostTimeLeft;
+  const msgSpan = $('timerStatusMsg');
+  if (msgSpan && isTimerActive) {
+    if (hostTimeLeft > 0) msgSpan.textContent = "⏳ Answering in progress...";
+    else msgSpan.textContent = "⌛ Expired";
+  } else if (msgSpan && !isTimerActive) {
+    msgSpan.textContent = "Timer stopped";
+  }
+}
+
+function resetHostTimerUI() {
+  stopHostTimer();
+  const timerElem = $('hostTimerSeconds');
+  if (timerElem) timerElem.textContent = '30';
+  const msgSpan = $('timerStatusMsg');
+  if (msgSpan) msgSpan.textContent = "Ready for next question";
+  const timerDiv = $('hostTimerWidget');
+  if (timerDiv) timerDiv.classList.remove('timer-urgent');
+}
+
+// Host triggers a new question: reset UI, start 30s timer
+function refreshHostTimerForCurrentQuestion() {
+  if (!isHost) return;
+  resetHostTimerUI();
+  // start new 30-second timer with auto-expire that does NOT automatically move to next,
+  // but host sees it expired, then can manually skip/next.
+  startHostTimer(30, () => {
+    // On expire: just update status message, no auto-navigation
+    if (isHost) {
+      const msgSpan = $('timerStatusMsg');
+      if (msgSpan) msgSpan.textContent = "⏰ TIME EXPIRED! Press Skip or Next to proceed.";
+      const timerDivEx = $('hostTimerWidget');
+      if (timerDivEx) timerDivEx.classList.add('timer-urgent');
+    }
+  });
+}
+
+// Host functions
 function hostStartGame(){
   gameRef.set({ state: 'playing', currentQuestion: 0, totalQuestions: Q.length, startedAt: Date.now() });
   $('hostStartGameBtn').style.display = 'none';
   $('hostGameControls').style.display = 'block';
+  // Reset timer UI and stop any running timer
+  resetHostTimerUI();
   updateHostDisplay(0);
+  refreshHostTimerForCurrentQuestion(); // Start timer for Q1
 }
 
 function hostNextQuestion(){
   const next = currentQIdx + 1;
   if(next >= Q.length){ hostEndGame(); return; }
   gameRef.update({ currentQuestion: next });
+  // timer will be restarted when updateHostDisplay triggers because of Firebase snapshot
 }
 
-function hostEndGame(){ gameRef.update({ state: 'finished' }); }
+function hostForceNextQuestion() {
+  // Skip current question: same as next question but without waiting for timer
+  const next = currentQIdx + 1;
+  if(next >= Q.length){
+    hostEndGame();
+    return;
+  }
+  // Stop timer and move on
+  stopHostTimer();
+  gameRef.update({ currentQuestion: next });
+}
+
+function hostEndGame(){ 
+  stopHostTimer();
+  gameRef.update({ state: 'finished' }); 
+}
 
 function updateHostDisplay(qIdx){
   currentQIdx = qIdx;
   $('hostQNum').textContent = qIdx + 1;
   $('hostQText').textContent = Q[qIdx].text;
   $('hostNextBtn').textContent = qIdx === Q.length - 1 ? '🏆 Finish & Show Results' : '▶ Next Question';
+  
+  // Whenever question updates on host, restart timer
+  if (isHost && $('hostGameControls').style.display === 'block') {
+    refreshHostTimerForCurrentQuestion();
+  }
 }
 
+// Firebase listeners
 gameRef.child('answers').on('value', snap => {
   if(!isHost) return;
   const answers = snap.val() || {};
@@ -211,12 +397,23 @@ gameRef.child('answers').on('value', snap => {
 gameRef.on('value', snap => {
   const data = snap.val();
   if(!data) return;
-  if(data.state === 'playing' && isHost){ updateHostDisplay(data.currentQuestion); }
+  if(data.state === 'playing' && isHost){ 
+    // if host sees a new currentQuestion index, update
+    if(data.currentQuestion !== currentQIdx) {
+      updateHostDisplay(data.currentQuestion);
+    }
+  }
   if(data.state === 'playing' && !isHost){
     const qIdx = data.currentQuestion;
-    if(qIdx !== currentQIdx){ currentQIdx = qIdx; renderGuestQuestion(qIdx); }
+    if(qIdx !== currentQIdx){ 
+      currentQIdx = qIdx; 
+      renderGuestQuestion(qIdx); 
+    }
   }
-  if(data.state === 'finished'){ showResults(); }
+  if(data.state === 'finished'){ 
+    stopHostTimer();
+    showResults(); 
+  }
 });
 
 function renderGuestQuestion(qIdx){
@@ -280,6 +477,7 @@ function showResults(){
   });
 }
 
+// Event listeners
 $('submitPasscodeBtn').onclick = ()=>{
   if($('passcodeInput').value.trim() === PASS){
     isHost = true; playerId = 'host-' + Date.now();
@@ -287,6 +485,9 @@ $('submitPasscodeBtn').onclick = ()=>{
     show('hostScreen');
     $('qrcodeContainer').innerHTML = '';
     new QRCode($('qrcodeContainer'),{text:window.location.href.split('?')[0],width:140,height:140,colorDark:"#4d3e2e",colorLight:"#fff"});
+    // ensure timer UI is not running initially because game not started
+    resetHostTimerUI();
+    $('hostGameControls').style.display = 'none';
   } else alert('Incorrect passcode');
 };
 
@@ -303,11 +504,20 @@ $('startGameBtn').onclick = ()=>{
 };
 
 $('hostStartGameBtn').onclick = hostStartGame;
-$('hostNextBtn').onclick = hostNextQuestion;
-$('hostEndBtn').onclick = hostEndGame;
-$('hostResetBtn').onclick = ()=>$('resetModal').style.display='flex';
-$('hostResultsResetBtn').onclick = ()=>$('resetModal').style.display='flex';
-$('confirmResetBtn').onclick = ()=>{ $('resetModal').style.display='none'; gameRef.remove(); location.reload(); };
+$('hostNextBtn').onclick = () => {
+  if (!isHost) return;
+  stopHostTimer();
+  hostNextQuestion();
+};
+$('hostForceNextBtn').onclick = () => {
+  if (!isHost) return;
+  stopHostTimer();
+  hostForceNextQuestion();
+};
+$('hostEndBtn').onclick = () => { stopHostTimer(); hostEndGame(); };
+$('hostResetBtn').onclick = ()=>{ stopHostTimer(); $('resetModal').style.display='flex'; };
+$('hostResultsResetBtn').onclick = ()=>{ stopHostTimer(); $('resetModal').style.display='flex'; };
+$('confirmResetBtn').onclick = ()=>{ $('resetModal').style.display='none'; stopHostTimer(); gameRef.remove(); location.reload(); };
 $('cancelResetBtn').onclick = ()=>$('resetModal').style.display='none';
 $('resetModal').onclick = (e)=>{if(e.target===$('resetModal'))$('resetModal').style.display='none';};
 
@@ -321,6 +531,7 @@ setInterval(()=>{
   }
 }, 2000);
 
+// Initialize UI
 show('passcodeScreen');
 </script>
 </body>
