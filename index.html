@@ -27,12 +27,14 @@
     .screen { display: none; flex-direction: column; gap: 1.2rem; animation: fadeIn 0.3s ease; }
     .active-screen { display: flex; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-    input { font-family: 'Montserrat', sans-serif; border-radius: 2.5rem; padding: 1rem 1.5rem; background: #f5f0e8; font-size: 0.95rem; border: none; outline: none; color: #3e3a37; }
+    input { font-family: 'Montserrat', sans-serif; border-radius: 2.5rem; padding: 1rem 1.5rem; background: #f5f0e8; font-size: 0.95rem; border: none; outline: none; color: #3e3a37; transition: all 0.2s; }
     input:focus { background: #efe8db; }
+    input.input-error { border: 2px solid #e0746a; background: #ffe8e6; }
     button { font-family: 'Montserrat', sans-serif; border-radius: 2.5rem; padding: 1rem 1.5rem; background: #e0d3bf; font-size: 0.95rem; border: none; cursor: pointer; font-weight: 500; color: #3a3229; box-shadow: 0 4px 12px rgba(140,110,70,0.1); transition: all 0.2s; }
     button:hover:not(:disabled) { background: #d4c4aa; transform: translateY(-1px); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .option-btn { text-align: left; background: #f5f0e8; width: 100%; box-shadow: none; }
+    .option-btn { text-align: left; background: #f5f0e8; width: 100%; box-shadow: none; transition: all 0.2s; }
+    .option-btn:hover:not(:disabled) { background: #e8dfd0; }
     .option-btn.correct-highlight { background: #d4dfcc; }
     .option-btn.wrong-highlight { background: #edd8cf; }
     .results-list { max-height: 250px; overflow-y: auto; background: #faf7f1; border-radius: 1.8rem; padding: 1rem; }
@@ -94,7 +96,6 @@
       box-shadow: 0 8px 20px rgba(0,0,0,0.1);
       object-fit: cover;
     }
-    /* Host options styling - read only */
     .host-options {
       background: #f5efe4;
       border-radius: 1rem;
@@ -113,31 +114,76 @@
       background: #d4dfcc;
       border-left: 3px solid #4a5e3f;
     }
+    .error-message {
+      color: #e0746a;
+      font-size: 0.75rem;
+      margin-top: -0.5rem;
+      margin-bottom: 0.5rem;
+      padding-left: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .error-message::before {
+      content: "⚠️";
+    }
+    .required-star {
+      color: #e0746a;
+      margin-left: 0.2rem;
+    }
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .input-label {
+      font-size: 0.75rem;
+      color: #8b7a67;
+      margin-left: 1rem;
+    }
   </style>
 </head>
 <body>
 <div class="app-container" id="appContainer">
   <div class="score-pill" id="liveScoreDisplay" style="display:none;">✦ <span id="scoreValue">0</span> pts</div>
 
+  <!-- Passcode Screen (Front Page with Image) -->
   <div id="passcodeScreen" class="screen active-screen">
     <img class="front-image" id="heroImage" src="https://raw.githubusercontent.com/janicewtk/weddingtrivia/main/wedding-character-transparent%20(1).png" alt="Janice & Toby" onerror="this.style.display='none'">
     <h1 class="game-title">Janice & Toby's Trivia</h1>
-    <p class="small-text" style="text-align:center; margin:0.5rem 0 1.5rem;">Enter host passcode</p>
-    <input type="password" id="passcodeInput" placeholder="Passcode" inputmode="numeric">
-    <button id="submitPasscodeBtn">Enter as Host</button>
-    <p class="small-text" style="text-align:center; margin-top:1rem;">Or</p>
-    <button id="joinAsGuestBtn" style="background:#f0e9db;">🎉 Join as Guest</button>
+    
+    <!-- Join as Guest button FIRST -->
+    <button id="joinAsGuestBtn" style="background:#f0e9db; width:100%;">🎉 Join as Guest</button>
+    
+    <p class="small-text" style="text-align:center; margin:0.5rem 0;">— or —</p>
+    
+    <!-- Host section SECOND -->
+    <input type="password" id="passcodeInput" placeholder="Host Passcode" inputmode="numeric">
+    <button id="submitPasscodeBtn" style="width:100%;">Enter as Host</button>
   </div>
 
+  <!-- Name Screen with required field validation -->
   <div id="nameScreen" class="screen">
     <h1 class="game-title" style="font-size:1.6rem;">Janice & Toby's Trivia</h1>
-    <h2 style="text-align:center; font-weight:300;">Welcome!</h2>
-    <input type="text" id="firstNameInput" placeholder="First Name" autocomplete="off">
-    <input type="text" id="lastNameInput" placeholder="Last Name" autocomplete="off">
+    <h2 style="text-align:center; font-weight:300;">Welcome! Please enter your name</h2>
+    
+    <div class="input-group">
+      <div class="input-label">First Name <span class="required-star">*</span></div>
+      <input type="text" id="firstNameInput" placeholder="Enter your first name" autocomplete="off">
+    </div>
+    
+    <div class="input-group">
+      <div class="input-label">Last Name <span class="required-star">*</span></div>
+      <input type="text" id="lastNameInput" placeholder="Enter your last name" autocomplete="off">
+    </div>
+    
+    <div id="nameError" class="error-message" style="display:none;">Both first name and last name are required</div>
+    
     <button id="startGameBtn">✨ Join Game</button>
     <button id="backToPasscodeBtn" style="background:#f0e9db;">← Back</button>
   </div>
 
+  <!-- Host Dashboard -->
   <div id="hostScreen" class="screen">
     <div style="text-align:center;"><span class="host-badge">✦ Host ✦</span></div>
     <h1 class="game-title" style="font-size:1.6rem;">Janice & Toby's Trivia</h1>
@@ -154,7 +200,6 @@
           <div class="small-text" id="timerStatusMsg">Ready</div>
         </div>
         <h2 id="hostQText" style="text-align:center; font-size:1.1rem; margin:0.5rem 0;"></h2>
-        <!-- Host sees all options (read-only) -->
         <div id="hostOptionsContainer" class="host-options"></div>
         <button id="hostNextBtn" style="width:100%; margin-bottom:0.5rem;">▶ Next Question</button>
         <button id="hostEndBtn" style="width:100%; margin-top:0.3rem; background:#cfbfa8;">🏆 End Game & Show Results</button>
@@ -166,6 +211,7 @@
     <p class="small-text" style="text-align:center;" id="hostInfo">Players joined: 0</p>
   </div>
 
+  <!-- Guest Waiting -->
   <div id="guestWaitingScreen" class="screen">
     <h1 class="game-title" style="font-size:1.3rem;">Janice & Toby's Trivia</h1>
     <div class="waiting-screen">
@@ -175,6 +221,7 @@
     </div>
   </div>
 
+  <!-- Guest Game -->
   <div id="guestGameScreen" class="screen">
     <h1 class="game-title" style="font-size:1.2rem;">Janice & Toby's Trivia</h1>
     <span class="small-text" id="guestQCounter">Question 1/10</span>
@@ -184,6 +231,7 @@
     <p class="small-text" style="text-align:center;" id="guestFeedback"></p>
   </div>
 
+  <!-- Results -->
   <div id="resultScreen" class="screen">
     <h1 class="game-title" style="font-size:1.4rem;">Janice & Toby's Trivia</h1>
     <h2 style="text-align:center; font-weight:300;">🏁 Final Scores</h2>
@@ -192,6 +240,7 @@
     <button id="hostResultsResetBtn" style="display:none; background:#e8d9c6;">🔄 Reset</button>
   </div>
 
+  <!-- Reset Modal -->
   <div id="resetModal" style="display:none; position:fixed; top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.25);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center;">
     <div style="background:#fefcf9;padding:2rem;border-radius:2rem;max-width:320px;text-align:center;">
       <h3 style="font-family:'Cormorant Garamond',serif;">Reset game?</h3>
@@ -219,7 +268,6 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const gameRef = db.ref('wedding-trivia-game');
 
-// Track when each question started for speed-based scoring
 let questionStartTime = null;
 
 const Q = [
@@ -249,7 +297,12 @@ function show(id){
   $('liveScoreDisplay').style.display = (id==='guestGameScreen')?'flex':'none';
 }
 
-// Display options for host (read-only)
+function clearNameErrors() {
+  $('firstNameInput').classList.remove('input-error');
+  $('lastNameInput').classList.remove('input-error');
+  $('nameError').style.display = 'none';
+}
+
 function displayHostOptions(qIdx) {
   const q = Q[qIdx];
   const container = $('hostOptionsContainer');
@@ -269,7 +322,6 @@ function displayHostOptions(qIdx) {
   });
 }
 
-// TIMER FUNCTIONS
 function stopHostTimer() {
   if (hostTimerInterval) {
     clearInterval(hostTimerInterval);
@@ -289,7 +341,6 @@ function startHostTimer() {
   if (msgSpan) msgSpan.textContent = "⏳ Answering in progress...";
   if (timerDiv) timerDiv.classList.remove('timer-urgent');
   
-  // Record when the question started for speed scoring
   questionStartTime = Date.now();
   
   hostTimerInterval = setInterval(() => {
@@ -314,22 +365,18 @@ function startHostTimer() {
   }, 1000);
 }
 
-// Calculate points based on how fast the answer was (0-20 seconds)
-// Faster = more points, up to 2000 points for instant answer
 function calculatePoints(reactionTimeMs) {
   const maxPoints = 2000;
   const minPoints = 500;
-  const maxTimeMs = 20000; // 20 seconds
+  const maxTimeMs = 20000;
   
   if (reactionTimeMs >= maxTimeMs) return minPoints;
   if (reactionTimeMs <= 0) return maxPoints;
   
-  // Linear scale: faster = more points
   const points = maxPoints - ((reactionTimeMs / maxTimeMs) * (maxPoints - minPoints));
   return Math.round(points);
 }
 
-// Host functions
 function hostStartGame(){
   gameRef.set({ 
     state: 'playing', 
@@ -340,13 +387,10 @@ function hostStartGame(){
     $('hostStartGameBtn').style.display = 'none';
     $('hostGameControls').style.display = 'block';
     currentQIdx = 0;
-    // Display first question
     $('hostQNum').textContent = '1';
     $('hostQText').textContent = Q[0].text;
     $('hostNextBtn').textContent = Q.length === 1 ? '🏆 Finish & Show Results' : '▶ Next Question';
-    // Display options for host
     displayHostOptions(0);
-    // Start the timer
     startHostTimer();
   });
 }
@@ -359,21 +403,14 @@ function hostNextQuestion() {
     return;
   }
   
-  // Stop timer
   stopHostTimer();
-  
-  // Update to next question
   currentQIdx = nextQ;
   
-  // Update display
   $('hostQNum').textContent = currentQIdx + 1;
   $('hostQText').textContent = Q[currentQIdx].text;
   $('hostNextBtn').textContent = currentQIdx === Q.length - 1 ? '🏆 Finish & Show Results' : '▶ Next Question';
-  
-  // Display options for host
   displayHostOptions(currentQIdx);
   
-  // Reset timer display
   const timerElem = $('hostTimerSeconds');
   const msgSpan = $('timerStatusMsg');
   const timerDiv = $('hostTimerWidget');
@@ -381,16 +418,42 @@ function hostNextQuestion() {
   if (msgSpan) msgSpan.textContent = "⏳ Answering in progress...";
   if (timerDiv) timerDiv.classList.remove('timer-urgent');
   
-  // Start fresh timer
   startHostTimer();
-  
-  // Update Firebase for guests
   gameRef.update({ currentQuestion: currentQIdx });
 }
 
 function hostEndGame(){ 
   stopHostTimer();
-  gameRef.update({ state: 'finished' }); 
+  // Update Firebase to finished state
+  gameRef.update({ state: 'finished' }).then(() => {
+    // Also directly show results for host
+    showResultsForHost();
+  });
+}
+
+// Separate function for host to show results directly
+function showResultsForHost() {
+  show('resultScreen');
+  gameRef.child('answers').once('value').then(snap => {
+    const answers = snap.val() || {};
+    const playerScores = {};
+    Object.values(answers).forEach(a => {
+      if(!playerScores[a.playerId]){ 
+        playerScores[a.playerId] = {
+          name: a.playerName, 
+          lastName: a.playerLastName, 
+          score: 0,
+          correctCount: 0
+        }; 
+      }
+      playerScores[a.playerId].score += a.points || 0;
+      if(a.correct) playerScores[a.playerId].correctCount++;
+    });
+    const sorted = Object.values(playerScores).sort((a,b)=>b.score-a.score);
+    $('finalRankings').innerHTML = sorted.length===0 ? '<p class="small-text">No players</p>' :
+      sorted.map((p,i)=>`<div class="result-item"><span>${i===0?'🥇':i===1?'🥈':i===2?'🥉':''} ${i+1}. ${p.name} ${p.lastName}</span> <strong>${p.score} pts</strong> <span class="small-text">(${p.correctCount}/10 correct)</span></div>`).join('');
+    $('hostResultsResetBtn').style.display = 'block';
+  });
 }
 
 // Firebase listeners
@@ -398,7 +461,6 @@ function setupGameListener() {
   if (isGameListenerSetup) return;
   isGameListenerSetup = true;
   
-  // Listen for answer counts
   gameRef.child('answers').on('value', snap => {
     if(!isHost) return;
     const answers = snap.val() || {};
@@ -406,7 +468,6 @@ function setupGameListener() {
     $('hostAnswerCount').textContent = count;
   });
   
-  // Main listener for guests
   gameRef.on('value', (snap) => {
     const data = snap.val();
     if(!data) return;
@@ -416,12 +477,11 @@ function setupGameListener() {
         const qIdx = data.currentQuestion;
         if(qIdx !== currentQIdx && qIdx >= 0 && qIdx < Q.length) {
           currentQIdx = qIdx;
-          // Reset question start time for new question
           questionStartTime = Date.now();
           renderGuestQuestion(qIdx);
         }
       } else if(data.state === 'finished') {
-        showResults();
+        showResultsForGuests();
       }
     }
   });
@@ -436,9 +496,10 @@ function renderGuestQuestion(qIdx){
   answered = false;
   const c = $('guestOptions');
   c.innerHTML = '';
+  
   q.opts.forEach((o,i)=>{
     const b = document.createElement('button');
-    b.className = 'option-btn'; 
+    b.className = 'option-btn';
     b.textContent = o;
     b.onclick = ()=>{ if(!answered) guestAnswer(i); };
     c.appendChild(b);
@@ -454,12 +515,9 @@ function guestAnswer(idx){
   let pts = 0;
   
   if(correct){
-    // Calculate points based on reaction time
     const reactionTime = Date.now() - questionStartTime;
     pts = calculatePoints(reactionTime);
     score += pts;
-    
-    // Show feedback with points earned
     const secondsTaken = (reactionTime / 1000).toFixed(1);
     $('guestFeedback').textContent = `✅ Correct! +${pts} points (Answered in ${secondsTaken}s)`;
   } else {
@@ -487,7 +545,7 @@ function guestAnswer(idx){
   });
 }
 
-function showResults(){
+function showResultsForGuests(){
   show('resultScreen');
   gameRef.child('answers').once('value').then(snap => {
     const answers = snap.val() || {};
@@ -507,8 +565,8 @@ function showResults(){
     const sorted = Object.values(playerScores).sort((a,b)=>b.score-a.score);
     $('finalRankings').innerHTML = sorted.length===0 ? '<p class="small-text">No players</p>' :
       sorted.map((p,i)=>`<div class="result-item"><span>${i===0?'🥇':i===1?'🥈':i===2?'🥉':''} ${i+1}. ${p.name} ${p.lastName}</span> <strong>${p.score} pts</strong> <span class="small-text">(${p.correctCount}/10 correct)</span></div>`).join('');
-    if(!isHost) $('guestResultMsg').textContent = '✨ Thank you for playing!';
-    $('hostResultsResetBtn').style.display = isHost?'block':'none';
+    $('guestResultMsg').textContent = '✨ Thank you for playing!';
+    $('hostResultsResetBtn').style.display = 'none';
   });
 }
 
@@ -536,21 +594,39 @@ $('submitPasscodeBtn').onclick = ()=>{
 
 $('joinAsGuestBtn').onclick = ()=>{ 
   isHost = false; 
+  clearNameErrors();
+  $('firstNameInput').value = '';
+  $('lastNameInput').value = '';
   show('nameScreen'); 
 };
 
 $('backToPasscodeBtn').onclick = ()=>show('passcodeScreen');
 
 $('startGameBtn').onclick = ()=>{
-  const f=$('firstNameInput').value.trim(), l=$('lastNameInput').value.trim();
-  if(!f||!l){
-    alert('Enter both names');
+  clearNameErrors();
+  
+  const f = $('firstNameInput').value.trim();
+  const l = $('lastNameInput').value.trim();
+  
+  let hasError = false;
+  if (!f) {
+    $('firstNameInput').classList.add('input-error');
+    hasError = true;
+  }
+  if (!l) {
+    $('lastNameInput').classList.add('input-error');
+    hasError = true;
+  }
+  
+  if (hasError) {
+    $('nameError').style.display = 'flex';
     return;
   }
-  pName=f; 
-  pLastName=l; 
+  
+  pName = f; 
+  pLastName = l; 
   playerId = 'guest-' + Date.now() + '-' + Math.random().toString(36).substr(2,5);
-  score=0;
+  score = 0;
   questionStartTime = Date.now();
   $('guestNameDisplay').textContent = f + ' ' + l;
   show('guestWaitingScreen');
@@ -562,7 +638,10 @@ $('hostNextBtn').onclick = () => {
   if (!isHost) return;
   hostNextQuestion();
 };
-$('hostEndBtn').onclick = () => { hostEndGame(); };
+$('hostEndBtn').onclick = () => { 
+  if (!isHost) return;
+  hostEndGame(); 
+};
 $('hostResetBtn').onclick = ()=>{ stopHostTimer(); $('resetModal').style.display='flex'; };
 $('hostResultsResetBtn').onclick = ()=>{ stopHostTimer(); $('resetModal').style.display='flex'; };
 $('confirmResetBtn').onclick = ()=>{ 
