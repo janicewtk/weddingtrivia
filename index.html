@@ -101,7 +101,7 @@
   <div class="score-pill" id="liveScoreDisplay" style="display:none;">✦ <span id="scoreValue">0</span> pts</div>
 
   <!-- Passcode Screen (Front Page with Image) -->
-  <div id="passcodeScreen" class="screen active-screen">
+  <div id="passcodeScreen" class="screen">
     <img class="front-image" id="heroImage" src="https://raw.githubusercontent.com/janicewtk/weddingtrivia/main/wedding-character-transparent%20(1).png" alt="Janice & Toby" onerror="this.style.display='none'">
     <h1 class="game-title">Janice & Toby's Trivia</h1>
     <p class="small-text" style="text-align:center; margin:0.5rem 0 1.5rem;">Enter host passcode</p>
@@ -227,6 +227,7 @@ let currentQIdx = -1, answered = false;
 let hostTimerInterval = null;
 let hostTimeLeft = 30;
 let isTimerActive = false;
+let isGameListenerSetup = false;
 
 function $(id){ return document.getElementById(id); }
 
@@ -312,7 +313,7 @@ function refreshHostTimerForCurrentQuestion() {
 
 // Host functions
 function hostStartGame(){
-  // Initialize the game state in Firebase
+  // Clear any existing data and start fresh
   gameRef.set({ 
     state: 'playing', 
     currentQuestion: 0, 
@@ -362,39 +363,35 @@ function updateHostDisplay(qIdx){
   }
 }
 
-// Firebase listeners - Fixed for guests
-gameRef.child('answers').on('value', snap => {
-  if(!isHost) return;
-  const answers = snap.val() || {};
-  const count = Object.values(answers).filter(a => a.qIndex === currentQIdx).length;
-  $('hostAnswerCount').textContent = count;
-});
-
-// Main game state listener - THIS FIXES THE GUEST ISSUE
-gameRef.on('value', (snap) => {
-  const data = snap.val();
-  if(!data) return;
+// Firebase listeners - ONLY setup once
+function setupGameListener() {
+  if (isGameListenerSetup) return;
+  isGameListenerSetup = true;
   
-  console.log("Game state update:", data.state, "Current Q:", data.currentQuestion); // For debugging
+  gameRef.child('answers').on('value', snap => {
+    if(!isHost) return;
+    const answers = snap.val() || {};
+    const count = Object.values(answers).filter(a => a.qIndex === currentQIdx).length;
+    $('hostAnswerCount').textContent = count;
+  });
   
-  if(data.state === 'playing') {
-    if(isHost) {
-      if(data.currentQuestion !== currentQIdx) {
-        updateHostDisplay(data.currentQuestion);
-      }
-    } else {
-      // Guest: move from waiting to game screen if not already there
+  gameRef.on('value', (snap) => {
+    const data = snap.val();
+    if(!data) return;
+    
+    // Only auto-navigate guests if they are NOT host and NOT already on game screen
+    if(!isHost && data.state === 'playing') {
       const qIdx = data.currentQuestion;
       if(qIdx !== currentQIdx && qIdx >= 0 && qIdx < Q.length) {
         currentQIdx = qIdx;
         renderGuestQuestion(qIdx);
       }
+    } else if(data.state === 'finished') {
+      if(isHost) stopHostTimer();
+      showResults();
     }
-  } else if(data.state === 'finished') {
-    if(isHost) stopHostTimer();
-    showResults();
-  }
-});
+  });
+}
 
 function renderGuestQuestion(qIdx){
   if(qIdx >= Q.length) return;
@@ -422,7 +419,7 @@ function guestAnswer(idx){
   const correct = idx === q.cor;
   let pts = 0;
   if(correct){
-    pts = 1000; // Full points for correct answer
+    pts = 1000;
     score += pts;
   }
   $('scoreValue').textContent = score;
@@ -485,6 +482,7 @@ $('submitPasscodeBtn').onclick = ()=>{
     });
     resetHostTimerUI();
     $('hostGameControls').style.display = 'none';
+    setupGameListener();
   } else {
     alert('Incorrect passcode');
   }
@@ -509,11 +507,12 @@ $('startGameBtn').onclick = ()=>{
   score=0;
   $('guestNameDisplay').textContent = f + ' ' + l;
   show('guestWaitingScreen');
+  setupGameListener();
   
   // Check if game already started
   gameRef.once('value').then(snap => {
     const data = snap.val();
-    if(data && data.state === 'playing' && data.currentQuestion !== undefined) {
+    if(data && data.state === 'playing' && data.currentQuestion !== undefined && data.currentQuestion >= 0) {
       currentQIdx = data.currentQuestion;
       renderGuestQuestion(currentQIdx);
     }
@@ -553,6 +552,7 @@ setInterval(()=>{
   }
 }, 2000);
 
+// Start on passcode screen - ensure we always show front page first
 show('passcodeScreen');
 </script>
 </body>
